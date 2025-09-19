@@ -83,12 +83,9 @@ This will:
   * **Recall:** 0.7241
   * **F1 Score:** 0.7500
 
-* Plots for evaluation metrics are saved in the `Plots/` folder.
-
 ---
 
 ## Notes
 
 * Ensure that the `Diabetes` column in the dataset is **binary (0 = non-diabetic, 1 = diabetic)**.
 * The main script uses **gradient descent** for training the scratch model.
-* Plots are saved automatically; no GUI is required.
