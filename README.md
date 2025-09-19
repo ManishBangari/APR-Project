@@ -70,8 +70,6 @@ This will:
   * Feature scaling and distribution plots
   * Target variable distribution
 
-📌 The EDA helps understand the dataset before training the model.
-
 ---
 
 ## Results
