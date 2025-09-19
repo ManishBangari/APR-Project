@@ -5,5 +5,4 @@ numpy
 matplotlib
 seaborn
 scikit-learn
-kagglehub
 pyqt5

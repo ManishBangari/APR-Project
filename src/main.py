@@ -1,139 +1,129 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
-import seaborn as sns
 import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# Set interactive Matplotlib backend for VS Code
-plt.switch_backend('Qt5Agg')  
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score,
+    f1_score, confusion_matrix, roc_curve, auc,
+    precision_recall_curve
+)
+from sklearn.linear_model import LogisticRegression
 
-plots_dir = "../Plots"
-os.makedirs(plots_dir, exist_ok=True)
-
-data_path = "../Data/retail_sales_dataset_preprocessed.csv"
-df = pd.read_csv(data_path)
-
-print("Data Summary:")
-print(df.describe())
-
-X = df.drop(["Product_Category_Encoded", "Qty_Price_Interaction"], axis=1).values
-y = df["Product_Category_Encoded"].values
-
-if np.any(np.isnan(X)) or np.any(np.isnan(y)):
-    print("Warning: NaN values found in data")
-if np.any(np.isinf(X)) or np.any(np.isinf(y)):
-    print("Warning: Infinite values found in data")
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Logistic Regression from Scratch (Multi-class with Softmax)
-class LogisticRegressionFromScratch:
-    def __init__(self, learning_rate=0.001, epochs=1000, clip_value=1.0):
-        self.lr = learning_rate
+class LogisticRegressionScratch:
+    def __init__(self, lr=0.01, epochs=1000):
+        self.lr = lr
         self.epochs = epochs
-        self.clip_value = clip_value
         self.weights = None
         self.bias = None
-        self.loss_history = []
 
-    def softmax(self, z):
-        exp_z = np.exp(z - np.max(z, axis=1, keepdims=True))
-        return exp_z / np.sum(exp_z, axis=1, keepdims=True)
+    def sigmoid(self, z):
+        return 1 / (1 + np.exp(-z))
 
     def fit(self, X, y):
         n_samples, n_features = X.shape
-        n_classes = len(np.unique(y))
-        self.weights = np.zeros((n_features, n_classes))
-        self.bias = np.zeros(n_classes)
+        self.weights = np.zeros(n_features)
+        self.bias = 0
 
-        y_one_hot = np.zeros((n_samples, n_classes))
-        y_one_hot[np.arange(n_samples), y.astype(int)] = 1
+        for _ in range(self.epochs):
+            linear_model = np.dot(X, self.weights) + self.bias
+            y_pred = self.sigmoid(linear_model)
 
-        # Gradient descent
-        for epoch in range(self.epochs):
-            # Forward pass
-            logits = np.dot(X, self.weights) + self.bias
-            y_pred = self.softmax(logits)
+            dw = (1 / n_samples) * np.dot(X.T, (y_pred - y))
+            db = (1 / n_samples) * np.sum(y_pred - y)
 
-            # Compute gradients
-            error = y_pred - y_one_hot
-            dw = (1 / n_samples) * np.dot(X.T, error)
-            db = (1 / n_samples) * np.sum(error, axis=0)
-
-            # Gradient clipping
-            dw = np.clip(dw, -self.clip_value, self.clip_value)
-            db = np.clip(db, -self.clip_value, self.clip_value)
-
-            # Update weights and bias
             self.weights -= self.lr * dw
             self.bias -= self.lr * db
 
-            # Compute cross-entropy loss
-            loss = -np.mean(np.sum(y_one_hot * np.log(y_pred + 1e-10), axis=1))
-            self.loss_history.append(loss)
-
-            if epoch % 100 == 0:
-                print(f"Epoch {epoch}, Loss: {loss:.4f}")
+    def predict_proba(self, X):
+        linear_model = np.dot(X, self.weights) + self.bias
+        return self.sigmoid(linear_model)
 
     def predict(self, X):
-        logits = np.dot(X, self.weights) + self.bias
-        y_pred = self.softmax(logits)
-        return np.argmax(y_pred, axis=1)
+        y_pred_prob = self.predict_proba(X)
+        return np.where(y_pred_prob >= 0.5, 1, 0)
 
-# Train from-scratch model
-model_scratch = LogisticRegressionFromScratch(learning_rate=0.001, epochs=1000, clip_value=1.0)
-model_scratch.fit(X_train, y_train)
-y_pred_scratch = model_scratch.predict(X_test)
+if __name__ == "__main__":
 
-# Train scikit-learn model
-model_sklearn = LogisticRegression(multi_class='multinomial', max_iter=1000, random_state=42)
-model_sklearn.fit(X_train, y_train)
-y_pred_sklearn = model_sklearn.predict(X_test)
+    plots_dir = "../Plots"
+    os.makedirs(plots_dir, exist_ok=True)
 
-# Calculating metrics 
-metrics = {
-    "Accuracy": (accuracy_score(y_test, y_pred_scratch), accuracy_score(y_test, y_pred_sklearn)),
-    "Precision": (precision_score(y_test, y_pred_scratch, average='macro'), precision_score(y_test, y_pred_sklearn, average='macro')),
-    "Recall": (recall_score(y_test, y_pred_scratch, average='macro'), recall_score(y_test, y_pred_sklearn, average='macro')),
-    "F1 Score": (f1_score(y_test, y_pred_scratch, average='macro'), f1_score(y_test, y_pred_sklearn, average='macro'))
-}
+    df = pd.read_csv("../Data/proc_pima_2_withheader.csv_preprocessed.csv")
+
+    X = df.drop("Diabetes", axis=1).values
+    y = df["Diabetes"].replace(-1, 0).values   
+
+    X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42)
 
 
-print("\nMetrics Comparison:")
-print(f"{'Metric':<20} {'From Scratch':<15} {'Scikit-Learn':<15}")
-print("-" * 50)
-for metric, (scratch, sklearn) in metrics.items():
-    print(f"{metric:<20} {scratch:.4f} {'':<5} {sklearn:.4f}")
+    scratch_model = LogisticRegressionScratch(lr=0.01, epochs=5000)
+    scratch_model.fit(X_train, y_train)
+    y_pred_scratch = scratch_model.predict(X_test)
 
-# Plot Confusion Matrices
-def plot_confusion_matrix(y_true, y_pred, title, filename):
-    cm = confusion_matrix(y_true, y_pred)
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                xticklabels=['Beauty', 'Clothing', 'Electronics'],
-                yticklabels=['Beauty', 'Clothing', 'Electronics'])
-    plt.title(title)
-    plt.xlabel('Predicted')
-    plt.ylabel('Actual')
-    plt.savefig(os.path.join(plots_dir, filename))
-    plt.show()
+    acc_scratch = accuracy_score(y_test, y_pred_scratch)
+    prec_scratch = precision_score(y_test, y_pred_scratch)
+    rec_scratch = recall_score(y_test, y_pred_scratch)
+    f1_scratch = f1_score(y_test, y_pred_scratch)
 
-plot_confusion_matrix(y_test, y_pred_scratch, 
-                      "Confusion Matrix (From Scratch)", 
-                      "confusion_matrix_scratch.png")
+    print("\n[Scratch Logistic Regression]")
+    print(f"Accuracy: {acc_scratch:.4f}")
+    print(f"Precision: {prec_scratch:.4f}")
+    print(f"Recall: {rec_scratch:.4f}")
+    print(f"F1 Score: {f1_scratch:.4f}")
 
-plot_confusion_matrix(y_test, y_pred_sklearn, 
-                      "Confusion Matrix (Scikit-Learn)", 
-                      "confusion_matrix_sklearn.png")
+    
+    sklearn_model = LogisticRegression(max_iter=1000)
+    sklearn_model.fit(X_train, y_train)
+    y_pred_sklearn = sklearn_model.predict(X_test)
 
-# Plot 3: Loss Curve
-plt.figure(figsize=(10, 6))
-plt.plot(model_scratch.loss_history)
-plt.xlabel("Epoch")
-plt.ylabel("Cross-Entropy Loss")
-plt.title("Training Loss Curve (From Scratch)")
-plt.savefig(os.path.join(plots_dir, "loss_curve_scratch.png"))
-plt.show()
+    acc_sklearn = accuracy_score(y_test, y_pred_sklearn)
+    prec_sklearn = precision_score(y_test, y_pred_sklearn)
+    rec_sklearn = recall_score(y_test, y_pred_sklearn)
+    f1_sklearn = f1_score(y_test, y_pred_sklearn)
+
+    print("\n[Sklearn Logistic Regression]")
+    print(f"Accuracy: {acc_sklearn:.4f}")
+    print(f"Precision: {prec_sklearn:.4f}")
+    print(f"Recall: {rec_sklearn:.4f}")
+    print(f"F1 Score: {f1_sklearn:.4f}")
+
+    # Confusion Matrix
+    cm = confusion_matrix(y_test, y_pred_sklearn)
+    plt.figure(figsize=(6, 4))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+    plt.title("Confusion Matrix (Sklearn Model)")
+    plt.xlabel("Predicted")
+    plt.ylabel("Actual")
+    plt.savefig(os.path.join(plots_dir, "confusion_matrix.png"))
+    plt.close()
+
+    # ROC Curve
+    y_proba_scratch = scratch_model.predict_proba(X_test)
+    fpr, tpr, _ = roc_curve(y_test, y_proba_scratch)
+    roc_auc = auc(fpr, tpr)
+
+    plt.figure(figsize=(6, 4))
+    plt.plot(fpr, tpr, label=f"Scratch AUC = {roc_auc:.2f}")
+    plt.plot([0, 1], [0, 1], linestyle="--")
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title("ROC Curve (Scratch Model)")
+    plt.legend()
+    plt.savefig(os.path.join(plots_dir, "roc_curve.png"))
+    plt.close()
+
+    # Precision-Recall Curve
+    precision, recall, _ = precision_recall_curve(y_test, y_proba_scratch)
+
+    plt.figure(figsize=(6, 4))
+    plt.plot(recall, precision, marker='.')
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.title("Precision-Recall Curve (Scratch Model)")
+    plt.savefig(os.path.join(plots_dir, "precision_recall_curve.png"))
+    plt.close()
+
+    print(f"\n Plots saved in: {plots_dir}")
